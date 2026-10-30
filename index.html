@@ -1,1 +1,180 @@
 
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>ZEZO NET - QR Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      background: #101827;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    .container {
+      max-width: 480px;
+      margin: 30px auto;
+      padding: 22px;
+      background: #1d293b;
+      border-radius: 18px;
+      box-shadow: 0 8px 25px #0006;
+    }
+    h1 { color: #36d6c3; }
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+      background: white;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 13px 22px;
+      margin: 12px 5px;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+      background: #16b99b;
+      color: white;
+    }
+    #status {
+      margin-top: 18px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #26364c;
+      line-height: 1.7;
+    }
+    .note {
+      color: #bdc9d8;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>ZEZO NET</h1>
+    <h3>ماسح كروت الإنترنت QR</h3>
+
+    <div id="reader"></div>
+
+    <button id="startBtn" onclick="startScanner()">
+      تشغيل الكاميرا
+    </button>
+
+    <button id="stopBtn" onclick="stopScanner()">
+      إيقاف الكاميرا
+    </button>
+
+    <div id="status">اضغط تشغيل الكاميرا ووجّهها إلى كود QR.</div>
+
+    <p class="note">
+      ZEZO NET<br>
+      امسح كود الكارت لتجهيز بيانات الدخول.
+    </p>
+  </div>
+
+<script>
+  let scanner = null;
+  let processing = false;
+
+  function showStatus(message) {
+    document.getElementById("status").textContent = message;
+  }
+
+  function extractCredentials(qrText) {
+    let parsed;
+
+    try {
+      parsed = new URL(qrText.trim());
+    } catch (e) {
+      throw new Error("الكود المقروء ليس رابطًا صالحًا.");
+    }
+
+    const username = parsed.searchParams.get("username");
+    const password = parsed.searchParams.get("password");
+
+    if (username === null || password === null ||
+        username === "" || password === "") {
+      throw new Error("الرابط لا يحتوي على بيانات الكارت كاملة.");
+    }
+
+    return { username, password };
+  }
+
+  async function startScanner() {
+    if (processing) return;
+
+    if (!window.Html5Qrcode) {
+      showStatus("تعذر تحميل مكتبة قراءة QR. تحقق من الإنترنت.");
+      return;
+    }
+
+    try {
+      if (!scanner) {
+        scanner = new Html5Qrcode("reader");
+      }
+
+      showStatus("جاري تشغيل الكاميرا...");
+
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScanSuccess,
+        function () {}
+      );
+
+      showStatus("وجّه الكاميرا إلى كود QR.");
+    } catch (error) {
+      showStatus("تعذر تشغيل الكاميرا. اسمح للموقع باستخدام الكاميرا وافتحه عبر HTTPS.");
+    }
+  }
+
+  async function stopScanner() {
+    if (scanner && scanner.isScanning) {
+      try {
+        await scanner.stop();
+        showStatus("تم إيقاف الكاميرا.");
+      } catch (e) {
+        showStatus("تعذر إيقاف الكاميرا.");
+      }
+    }
+  }
+
+  async function onScanSuccess(decodedText) {
+    if (processing) return;
+    processing = true;
+
+    try {
+      const data = extractCredentials(decodedText);
+
+      await stopScanner();
+
+      showStatus("تمت قراءة الكارت. جاري الانتقال إلى صفحة ZEZO NET...");
+
+      const target = new URL("http://10.0.0.2/login");
+      target.searchParams.set("username", data.username);
+      target.searchParams.set("password", data.password);
+      target.searchParams.set("qr", "1");
+
+      window.location.href = target.toString();
+
+    } catch (error) {
+      processing = false;
+      showStatus(error.message);
+    }
+  }
+</script>
+</body>
+</html>
